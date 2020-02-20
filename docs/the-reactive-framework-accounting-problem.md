@@ -163,7 +163,7 @@ It is true that rerendering a large part of your view will invalidate subscripti
 
 ### Need Not Affect Data Usage
 
-Today's attempts at fine-grained tracking have made data usage more complex (e.g Svelte's assignment based reactivity). However, [membranes](http://soft.vub.ac.be/Publications/2012/vub-soft-tr-12-03.pdf) enable transparent fine-grained tracking.
+Today's attempts at fine-grained tracking have made data usage more complex (e.g Svelte's assignment based reactivity). However, Gact enables fine-graned tracking without complicating data usage.
 
 <a name="makes-rendering-a-small-view-size-problem"></a>
 
@@ -193,52 +193,11 @@ As stated, however, fine-grained tracking enables minimal reconciliation trees a
 
 ## Granular Accounting
 
-State is a tree of containers (e.g Array) and base elements (e.g "Gact"). Granular accounting is the idea of tracking exactly which _parts_ of the tree are used. None of the existing reactivity systems are granular. Without granular accounting we are doomed to have imprecise answers to the accounting problem (e.g this instance uses some part of this array and some part of this array changed).
+State is a tree of containers (e.g Array) and base elements (e.g "Gact"). Granular accounting is the idea of tracking exactly which parts of the tree are used. None of the existing reactivity systems are granular. Without granular accounting we are doomed to have imprecise answers to the accounting problem (e.g this instance uses some part of this array and some part of this array changed).
 
 Gact employs a granular accounting system to perfectly solve the accounting problem (e.g this instance reads the third element of this array and the third element of this array changed).
 
 Gact track reads and writes to figure out which parts of the interface need to be updated. We track usage by the path (e.g `["login", "username"]`) of the values . We know a part of our interface needs to be updated if there is a non-null intersection between the state it reads and the state written by an update.
-
-Let's explore the dynamics of granular accounting with an example. Let's say we have a login form composed of two fields: `username` and `password`:
-
-```javascript
-let login = {
-  username: "",
-  password: ""
-};
-```
-
-In our interface, there will be two inputs, which independently read and write their respective value. Concretely, the username input will read the current value for username with `login.username` and update the value with `login.username = e.target.value`.
-
-Our username input definitely depends on updates to `["login", "username"]` . But it equally depends on updates to `["login"]`. If we rewrote the entire login form state, then we would need to update the username input. Hence, we will account the username input's reads (i.e is dependent on updates to) as follows:
-
-```javascript
-[["login"], ["login", "username"]];
-```
-
-On the other hand, we will account the username input's writes (i.e the elements of the state tree that are changed) as follows:
-
-```javascript
-[["login", "username"]];
-```
-
-Clearly our update changes `["login", "username"]`. But does it not also change `["login"]`? Whenever any part of a value is written, the value as a whole is also written. That is a valid viewpoint, but obstructs the purpose of our accounting.
-
-If we considered a write to a value to also be a write to every ancestor, then we completely lose granularity. For example, if `login.username = e.target.value` is considered a write to `["login"]`, then we would try to update the password input because it also reads `["login"]`.
-
-You may fear that by not considering the ancestors of a given element as written that we will miss updates. But this will never happen because the visual impact of a container (e.g object) is not influenced by its contents. If you show the user the value of `login`, you will just show `[object Object]`.
-
-There is one exception to ancestor exclusion for write tracking. If you add or delete an element to a container, then we consider that to be a write to the container. For example, `login.email = ""` would be considered a write to `["login"]`. This is necessary to correctly handle structural dependence (e.g `Object.keys(login)`, `Object.values(login)`).
-
-But there will also be situations where you have a collection of values that are used disparately. For example, you may have an object that contains many unrelated entries. By default adding or removing entries would trigger false updates. In order to avoid this, Gact allows you to tag a container as disparate. For disparte containers, additions and deletions are considered a write to the specific element.
-
-In summary:
-
-- When you read a specific element, you also read all ancestors.
-- When you update a specific element, you only write to that element
-- When you add or delete a specific element:
-  - if it's a disparte container, you only write to that element
-  - else you write to its container
 
 <a name="conclusion"></a>
 
